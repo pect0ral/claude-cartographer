@@ -118,12 +118,11 @@ cd /path/to/your/project
 ### Option 1: Quick Install (Recommended)
 
 ```bash
-# Unix/Mac/Linux
+# macOS/Linux
 ./quick-install.sh /path/to/project
-
-# Windows
-quick-install.bat C:\path\to\project
 ```
+
+> **Note:** Windows is not currently supported. macOS and Linux only.
 
 ### Option 2: Python Install
 
