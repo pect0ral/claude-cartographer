@@ -1,25 +1,61 @@
 #!/bin/bash
-# Codebase Cartographer - Unified Setup
+# Codebase Cartographer - Full Setup
 # Copyright (c) 2025 Breach Craft - Mike Piekarski <mp@breachcraft.io>
 #
-# One-command setup that installs everything:
-# - Portable venv with dependencies
-# - Codebase mapping tools
-# - Claude Code integration (hooks, skills, commands)
-# - Initial codebase map
+# Complete setup: install + initialize map + run benchmark
 #
 # Usage:
 #   ./setup.sh                    # Setup in current directory
 #   ./setup.sh /path/to/project   # Setup in specific directory
+#   ./setup.sh --update           # Update and reinitialize
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="${1:-$(pwd)}"
+PROJECT_ROOT=""
+UPDATE_MODE=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --update|-u)
+            UPDATE_MODE="--update"
+            shift
+            ;;
+        --force|-f)
+            UPDATE_MODE="--force"
+            shift
+            ;;
+        --help|-h)
+            echo "Codebase Cartographer - Full Setup"
+            echo ""
+            echo "Usage:"
+            echo "  ./setup.sh [options] [project_path]"
+            echo ""
+            echo "Options:"
+            echo "  --update, -u    Update existing installation"
+            echo "  --force, -f     Force fresh installation"
+            echo "  --help, -h      Show this help"
+            echo ""
+            echo "This script installs cartographer, initializes the codebase map,"
+            echo "and runs a benchmark to show token savings."
+            exit 0
+            ;;
+        *)
+            PROJECT_ROOT="$1"
+            shift
+            ;;
+    esac
+done
+
+# Default to current directory
+if [ -z "$PROJECT_ROOT" ]; then
+    PROJECT_ROOT="$(pwd)"
+fi
 PROJECT_ROOT="$(cd "$PROJECT_ROOT" && pwd)"
 
 echo "======================================================================"
-echo "Codebase Cartographer - Unified Setup"
+echo "Codebase Cartographer - Full Setup"
 echo "Copyright (c) 2025 Breach Craft - Mike Piekarski <mp@breachcraft.io>"
 echo "======================================================================"
 echo ""
@@ -37,24 +73,22 @@ else
     exit 1
 fi
 
-# Check Python version
-PY_VERSION=$($PYTHON -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-echo "Python: $PYTHON (version $PY_VERSION)"
-
-# Step 1: Install Cartographer
+echo "Python: $PYTHON"
 echo ""
+
+# Step 1: Install/Update Cartographer
 echo "Step 1: Installing Codebase Cartographer..."
 echo "----------------------------------------------------------------------"
-$PYTHON "$SCRIPT_DIR/install.py" "$PROJECT_ROOT"
+$PYTHON "$SCRIPT_DIR/install.py" $UPDATE_MODE "$PROJECT_ROOT"
 
 # Step 2: Initialize the map
 echo ""
 echo "Step 2: Initializing codebase map..."
 echo "----------------------------------------------------------------------"
-cd "$PROJECT_ROOT"
+CLAUDE_MAP="$PROJECT_ROOT/.claude-map/bin/claude-map"
 
-if [ -f ".claude-map/bin/claude-map" ]; then
-    .claude-map/bin/claude-map init
+if [ -f "$CLAUDE_MAP" ]; then
+    "$CLAUDE_MAP" init
 else
     echo "Error: Installation failed - claude-map not found"
     exit 1
@@ -64,7 +98,7 @@ fi
 echo ""
 echo "Step 3: Running token optimization benchmark..."
 echo "----------------------------------------------------------------------"
-.claude-map/bin/claude-map benchmark
+"$CLAUDE_MAP" benchmark
 
 # Done
 echo ""
@@ -74,20 +108,16 @@ echo "======================================================================"
 echo ""
 echo "Installation:"
 echo "  Map database: $PROJECT_ROOT/.claude-map/codebase.db"
-echo "  CLI tool:     $PROJECT_ROOT/.claude-map/bin/claude-map"
+echo "  CLI tool:     $CLAUDE_MAP"
 echo "  Claude hooks: $PROJECT_ROOT/.claude/hooks/"
 echo ""
 echo "Quick Start:"
-echo "  .claude-map/bin/claude-map find <name>      # Find component"
-echo "  .claude-map/bin/claude-map query '<text>'   # Natural language query"
-echo "  .claude-map/bin/claude-map show <file>      # Show file components"
-echo "  .claude-map/bin/claude-map stats            # Show statistics"
+echo "  $CLAUDE_MAP find <name>      # Find component"
+echo "  $CLAUDE_MAP query '<text>'   # Natural language query"
+echo "  $CLAUDE_MAP show <file>      # Show file components"
+echo "  $CLAUDE_MAP stats            # Show statistics"
 echo ""
-echo "Claude Integration:"
-echo "  - Hooks auto-update the map when files change"
-echo "  - Use /map command for manual updates"
-echo "  - Read .claude/skills/cartographer.md for usage tips"
-echo ""
-echo "Uninstall:"
-echo "  rm -rf .claude-map .claude/hooks/cartographer-* .claude/skills/cartographer.md"
+echo "Management:"
+echo "  ./quick-install.sh --update     # Update to latest version"
+echo "  ./quick-install.sh --uninstall  # Remove installation"
 echo ""

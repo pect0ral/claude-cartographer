@@ -246,6 +246,26 @@ project/
 
 The installer automatically sets up Claude Code integration:
 
+### CLAUDE.md Integration
+
+The installer adds instructions to your project's `CLAUDE.md` file that teach Claude to prioritize the cartographer over its native tools:
+
+```markdown
+## CRITICAL: Use Codebase Cartographer First
+
+**You MUST use the cartographer BEFORE using Read, Grep, or Glob tools to explore code.**
+
+**In Planning Mode:** When using EnterPlanMode, your FIRST action should be to use the cartographer...
+```
+
+**Key behaviors:**
+- Claude is instructed to query the cartographer **first** before using Read, Grep, or Glob
+- In **Planning Mode**, Claude uses the cartographer as its first action to understand the codebase structure
+- If the cartographer returns no results, Claude **falls back** to its native tools (Grep, Glob, Read)
+- The section is wrapped in `<!-- CARTOGRAPHER_START -->` / `<!-- CARTOGRAPHER_END -->` markers for easy updates
+
+This "cartographer-first, native-fallback" approach ensures Claude always tries the token-efficient path while maintaining full functionality for edge cases the cartographer doesn't cover.
+
 ### Automatic Updates
 Hooks automatically queue file updates when you use Edit/Write tools.
 The map is updated at session end or when the queue reaches 10 files.

@@ -9,7 +9,7 @@ Sets up hooks, skills, and commands in the project's .claude directory.
 
 import os
 import json
-import shutil
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -80,30 +80,27 @@ class ClaudeIntegrationInstaller:
             d.mkdir(parents=True, exist_ok=True)
 
     def _install_skill(self):
-        """Install the cartographer skill."""
-        src = self.source_dir / 'skills' / 'cartographer.md'
+        """Install the cartographer skill with absolute paths."""
         dst = self.claude_dir / 'skills' / 'cartographer.md'
-
-        if src.exists():
-            shutil.copy2(src, dst)
-            print("    + Installed skill: cartographer.md")
-        else:
-            # Create minimal skill inline
-            self._create_minimal_skill(dst)
+        # Always use dynamic generation to ensure absolute paths are embedded
+        self._create_minimal_skill(dst)
 
     def _create_minimal_skill(self, dst: Path):
         """Create minimal skill definition."""
-        content = '''# Codebase Cartographer Skill
+        # Use absolute path to avoid issues when Claude changes working directory
+        claude_map_bin = str(self.claude_map_dir / 'bin' / 'claude-map')
 
-Use `.claude-map/bin/claude-map` for token-efficient code exploration.
+        content = f'''# Codebase Cartographer Skill
+
+Use `{claude_map_bin}` for token-efficient code exploration.
 
 ## Commands
 ```bash
-.claude-map/bin/claude-map find <name>      # Find component
-.claude-map/bin/claude-map query "<text>"   # Natural language query
-.claude-map/bin/claude-map show <file>      # Show file components
-.claude-map/bin/claude-map exports          # List public API
-.claude-map/bin/claude-map update           # Update map
+{claude_map_bin} find <name>      # Find component
+{claude_map_bin} query "<text>"   # Natural language query
+{claude_map_bin} show <file>      # Show file components
+{claude_map_bin} exports          # List public API
+{claude_map_bin} update           # Update map
 ```
 
 ## Best Practice
@@ -167,7 +164,10 @@ exit 0
 
     def _install_commands(self):
         """Install slash command definitions."""
-        cmd_content = '''# /map - Codebase Cartographer
+        # Use absolute path to avoid issues when Claude changes working directory
+        claude_map_bin = str(self.claude_map_dir / 'bin' / 'claude-map')
+
+        cmd_content = f'''# /map - Codebase Cartographer
 
 Manage the codebase map for token-efficient exploration.
 
@@ -178,7 +178,7 @@ Manage the codebase map for token-efficient exploration.
 - `/map find <name>` - Quick search
 
 ## Execution
-Run: `.claude-map/bin/claude-map <subcommand>`
+Run: `{claude_map_bin} <subcommand>`
 '''
         cmd_path = self.claude_dir / 'commands' / 'map.md'
         cmd_path.write_text(cmd_content)
@@ -188,15 +188,24 @@ Run: `.claude-map/bin/claude-map <subcommand>`
         """Update or create project CLAUDE.md with cartographer instructions at top."""
         claude_md = self.project_root / 'CLAUDE.md'
 
-        cartographer_section = '''
+        # Use absolute path to avoid issues when Claude changes working directory
+        claude_map_bin = str(self.claude_map_dir / 'bin' / 'claude-map')
+
+        # Markers for identifying and updating the cartographer section
+        start_marker = '<!-- CARTOGRAPHER_START -->'
+        end_marker = '<!-- CARTOGRAPHER_END -->'
+
+        cartographer_section = f'''{start_marker}
 ## CRITICAL: Use Codebase Cartographer First
 
-**BEFORE using Read, Grep, or Glob tools to explore code, you MUST use the cartographer:**
+**You MUST use the cartographer BEFORE using Read, Grep, or Glob tools to explore code.**
+
+**In Planning Mode:** When using EnterPlanMode, your FIRST action should be to use the cartographer to understand the codebase structure before designing your implementation approach.
 
 ```bash
-.claude-map/bin/claude-map find <name>      # Find function/class/component by name
-.claude-map/bin/claude-map query "<text>"   # Natural language search
-.claude-map/bin/claude-map show <file>      # Show file structure without reading full content
+{claude_map_bin} find <name>      # Find function/class/component by name
+{claude_map_bin} query "<text>"   # Natural language search
+{claude_map_bin} show <file>      # Show file structure without reading full content
 ```
 
 **Why this matters:**
@@ -205,15 +214,23 @@ Run: `.claude-map/bin/claude-map <subcommand>`
 - Use Read tool ONLY after cartographer identifies the specific lines you need
 
 **Workflow:**
-1. `claude-map find ComponentName` → get file path and line numbers
+1. `{claude_map_bin} find ComponentName` - get file path and line numbers
 2. `Read` tool with specific line range if you need implementation details
 
-**Fallback:** If cartographer returns no results, you may use native Grep/Glob/Read tools.
-'''
+**Fallback:** If cartographer returns no results, use native Grep/Glob/Read tools.
+{end_marker}'''
 
         if claude_md.exists():
             content = claude_md.read_text()
-            if 'Codebase Cartographer' not in content:
+
+            # Check if we need to update an existing section
+            if start_marker in content and end_marker in content:
+                # Replace existing cartographer section
+                pattern = re.escape(start_marker) + r'.*?' + re.escape(end_marker)
+                new_content = re.sub(pattern, cartographer_section, content, flags=re.DOTALL)
+                claude_md.write_text(new_content)
+                print("    + Updated CLAUDE.md (refreshed cartographer section)")
+            elif 'Codebase Cartographer' not in content:
                 # Insert after the first header line, not at the end
                 lines = content.split('\n')
                 insert_idx = 0
@@ -227,15 +244,15 @@ Run: `.claude-map/bin/claude-map <subcommand>`
                             insert_idx += 1
                         break
 
-                # Insert the cartographer section
-                lines.insert(insert_idx, cartographer_section)
+                # Insert the cartographer section with blank line after
+                lines.insert(insert_idx, '\n' + cartographer_section + '\n')
                 claude_md.write_text('\n'.join(lines))
                 print("    + Updated CLAUDE.md (inserted at top)")
             else:
-                print("    = CLAUDE.md already has cartographer section")
+                print("    = CLAUDE.md already has cartographer section (add markers to enable updates)")
         else:
             # Create new CLAUDE.md
-            claude_md.write_text(f"# Project Instructions\n{cartographer_section}")
+            claude_md.write_text(f"# Project Instructions\n\n{cartographer_section}\n")
             print("    + Created CLAUDE.md")
 
     def _update_settings(self):

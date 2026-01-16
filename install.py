@@ -4,13 +4,13 @@ Codebase Cartographer - Token-optimized codebase mapping for Claude Code
 Copyright (c) 2025 Breach Craft - Mike Piekarski <mp@breachcraft.io>
 Licensed under MIT License
 
-Standalone installer script.
-Run this from the repository root to install Codebase Cartographer.
+Unified installer script.
 
 Usage:
-    python install.py                      # Install in current directory
-    python install.py /path/to/project     # Install in specific directory
-    python install.py --force              # Force reinstall
+    python install.py [project_path]        # Install (default: current directory)
+    python install.py --update              # Update existing installation
+    python install.py --uninstall           # Remove installation
+    python install.py --force               # Force fresh install
 """
 
 import os
@@ -23,18 +23,27 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(
-        description='Install Codebase Cartographer',
+        description='Codebase Cartographer - Token-optimized codebase mapping',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-    # Install in current directory
+    # Fresh install in current directory
     python install.py
 
-    # Install in specific directory
+    # Install in specific project
     python install.py /path/to/project
 
-    # Force reinstall
+    # Update existing installation (preserves config and database)
+    python install.py --update
+    python install.py -u /path/to/project
+
+    # Force fresh install (removes existing)
     python install.py --force
+    python install.py -f /path/to/project
+
+    # Uninstall
+    python install.py --uninstall
+    python install.py --uninstall --keep-db  # Backup database
 
 Copyright (c) 2025 Breach Craft - Mike Piekarski <mp@breachcraft.io>
 """
@@ -47,21 +56,32 @@ Copyright (c) 2025 Breach Craft - Mike Piekarski <mp@breachcraft.io>
         help='Project root directory (default: current directory)'
     )
 
-    parser.add_argument(
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        '--update', '-u',
+        action='store_true',
+        help='Update existing installation, preserving user configuration'
+    )
+    group.add_argument(
+        '--uninstall', '--remove',
+        action='store_true',
+        help='Remove cartographer from the project'
+    )
+    group.add_argument(
         '--force', '-f',
         action='store_true',
-        help='Force reinstall even if already installed'
+        help='Force fresh installation (removes existing)'
+    )
+
+    parser.add_argument(
+        '--keep-db',
+        action='store_true',
+        help='With --uninstall: backup the codebase database'
     )
 
     args = parser.parse_args()
 
     project_path = Path(args.project_root).resolve()
-
-    print("=" * 70)
-    print("Codebase Cartographer - Installation")
-    print("Copyright (c) 2025 Breach Craft - Mike Piekarski <mp@breachcraft.io>")
-    print("=" * 70)
-    print(f"\nProject: {project_path}")
 
     # Check if we're in the source directory
     src_dir = Path(__file__).parent / 'src' / 'cartographer'
@@ -75,14 +95,20 @@ Copyright (c) 2025 Breach Craft - Mike Piekarski <mp@breachcraft.io>
     sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
     try:
-        from cartographer.bootstrap import PortableInstaller
+        from cartographer.bootstrap import CartographerInstaller
 
-        installer = PortableInstaller(
+        installer = CartographerInstaller(
             project_root=project_path,
             source_dir=src_dir
         )
 
-        success = installer.install(force=args.force)
+        if args.uninstall:
+            success = installer.uninstall(keep_db=args.keep_db)
+        elif args.update:
+            success = installer.update()
+        else:
+            success = installer.install(force=args.force)
+
         sys.exit(0 if success else 1)
 
     except ImportError as e:
