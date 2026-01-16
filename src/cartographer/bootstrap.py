@@ -903,7 +903,7 @@ When results are truncated, the output will show:
 
         source_files = [
             '__init__.py', '__main__.py', 'database.py', 'mapper.py',
-            'parsers.py', 'integration.py', 'watcher.py', 'benchmark.py',
+            'integration.py', 'watcher.py', 'benchmark.py',
             'cli.py', 'bootstrap.py', 'claude_integration.py', 'session_tracker.py',
         ]
 
@@ -911,6 +911,14 @@ When results are truncated, the output will show:
             src = self.source_dir / filename
             if src.exists():
                 shutil.copy2(src, target / filename)
+
+        # Copy parsers subdirectory
+        parsers_src = self.source_dir / 'parsers'
+        parsers_target = target / 'parsers'
+        if parsers_src.exists() and parsers_src.is_dir():
+            if parsers_target.exists():
+                shutil.rmtree(parsers_target)
+            shutil.copytree(parsers_src, parsers_target)
 
     def _create_launchers(self):
         """Create launcher scripts."""
