@@ -743,7 +743,14 @@ class TokenOptimizedDatabase:
                 result += f"\n\n--- Results {offset + 1}-{shown_end} of {total_count} ---"
 
             return result
-        return f"No results for '{query}'"
+        return (
+            f"No results for '{query}'\n\n"
+            "Try:\n"
+            "  - Use 'find <name>' for exact component name search\n"
+            "  - Use 'show <file.py>' to see components in a file\n"
+            "  - Use 'exports' to list all public components\n"
+            "  - Check spelling or use partial names"
+        )
 
     def get_call_chain(self, func_name: str, max_depth: int = 3) -> str:
         """

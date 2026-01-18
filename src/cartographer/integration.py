@@ -106,43 +106,83 @@ class ClaudeCodeIntegration:
         return result
 
     def _parse_intent(self, query: str) -> Tuple[str, str]:
-        """Parse query to determine intent and target."""
+        """Parse query to determine intent and target.
+
+        Handles natural language variations for:
+        - find: locate specific components by name
+        - detail: get detailed info about a component
+        - dependencies: file/module dependencies
+        - calls: call chain analysis
+        - file: show file structure
+        - exports: list public API
+        - overview: codebase structure overview
+        - search: fallback FTS search
+        """
+        query_lower = query.lower()
 
         # Overview patterns
-        if any(p in query for p in ['overview', 'structure', 'architecture', 'what is this']):
+        if any(p in query_lower for p in ['overview', 'structure', 'architecture', 'what is this', 'codebase summary']):
             return 'overview', ''
 
-        # Find patterns
+        # Export/list patterns (check before find to catch "list all X")
+        export_patterns = [
+            r'list\s+(?:all\s+)?(?:exported|public)\s+',
+            r'list\s+(?:all\s+)?exports',
+            r'list\s+(?:all\s+)?components',
+            r'show\s+(?:all\s+)?exports',
+            r'public\s+api',
+            r'public\s+interface',
+            r'exported\s+(?:functions|classes|components)',
+        ]
+        for pattern in export_patterns:
+            if re.search(pattern, query_lower):
+                return 'exports', ''
+
+        # Dependencies patterns - check before find/detail to catch "what does X depend on"
+        # Order matters: more specific patterns first to avoid greedy matching
+        dep_patterns = [
+            # Specific "what does X depend/import" patterns first
+            r'what\s+does\s+([^\s]+)\s+(?:depend|import|use|require)',
+            r'what\s+(?:are|does)\s+([^\s]+)\s+import',
+            # File extension patterns
+            r'([^\s]+\.(?:py|js|ts|go|rb))\s+depend',
+            # Require preposition to avoid matching "depend on" -> "on"
+            r'dependencies\s+(?:of|for|in)\s+([^\s]+)',
+            r'imports?\s+(?:of|for|in)\s+([^\s]+)',
+        ]
+        for pattern in dep_patterns:
+            if match := re.search(pattern, query, re.IGNORECASE):
+                return 'dependencies', match.group(1)
+
+        # Find patterns - expanded set (use re.IGNORECASE to preserve original case)
         find_patterns = [
-            r'find\s+(\w+)',
-            r'where\s+is\s+(\w+)',
-            r'locate\s+(\w+)',
-            r'show\s+me\s+(\w+)',
+            r'find\s+(?:the\s+)?(\w+)',
+            r'where\s+is\s+(?:the\s+)?(\w+)',
+            r'locate\s+(?:the\s+)?(\w+)',
+            r'show\s+me\s+(?:the\s+)?(\w+)',
+            r'look\s+for\s+(?:the\s+)?(\w+)',
+            r'search\s+for\s+(?:the\s+)?(\w+)',
+            r'get\s+(?:the\s+)?(\w+)',
         ]
         for pattern in find_patterns:
-            if match := re.search(pattern, query):
-                return 'find', match.group(1)
+            if match := re.search(pattern, query, re.IGNORECASE):
+                target = match.group(1)
+                # Skip common words that aren't component names
+                if target.lower() not in ('the', 'a', 'an', 'all', 'any', 'some', 'function', 'class', 'method', 'component'):
+                    return 'find', target
 
         # Detail patterns
         detail_patterns = [
-            r'detail(?:s)?\s+(?:for\s+)?(\w+)',
-            r'explain\s+(\w+)',
-            r'what\s+(?:is|does)\s+(\w+)',
-            r'describe\s+(\w+)',
+            r'detail(?:s)?\s+(?:for\s+|about\s+|of\s+)?(\w+)',
+            r'explain\s+(?:the\s+)?(\w+)',
+            r'what\s+(?:is|does)\s+(?:the\s+)?(\w+)',
+            r'describe\s+(?:the\s+)?(\w+)',
+            r'tell\s+me\s+about\s+(\w+)',
+            r'info\s+(?:on|about)\s+(\w+)',
         ]
         for pattern in detail_patterns:
-            if match := re.search(pattern, query):
+            if match := re.search(pattern, query_lower):
                 return 'detail', match.group(1)
-
-        # Dependencies patterns
-        dep_patterns = [
-            r'depend(?:encies|s)?\s+(?:of|for)?\s*([^\s]+)',
-            r'what\s+does\s+([^\s]+)\s+(?:import|use|depend)',
-            r'imports?\s+(?:of|for|in)\s*([^\s]+)',
-        ]
-        for pattern in dep_patterns:
-            if match := re.search(pattern, query):
-                return 'dependencies', match.group(1)
 
         # Call chain patterns
         call_patterns = [
@@ -150,33 +190,41 @@ class ClaudeCodeIntegration:
             r'who\s+calls\s+(\w+)',
             r'what\s+calls\s+(\w+)',
             r'call\s+chain\s+(?:for\s+)?(\w+)',
+            r'callers\s+of\s+(\w+)',
+            r'(\w+)\s+call\s+chain',
         ]
         for pattern in call_patterns:
-            if match := re.search(pattern, query):
+            if match := re.search(pattern, query_lower):
                 return 'calls', match.group(1)
 
         # File patterns
         file_patterns = [
             r'file\s+([^\s]+)',
-            r'show\s+([^\s]+\.(?:py|js|ts|go|rb))',
-            r'in\s+([^\s]+\.(?:py|js|ts|go|rb))',
+            r'show\s+([^\s]+\.(?:py|js|ts|go|rb|jsx|tsx))',
+            r'in\s+([^\s]+\.(?:py|js|ts|go|rb|jsx|tsx))',
+            r'components?\s+in\s+([^\s]+)',
         ]
         for pattern in file_patterns:
-            if match := re.search(pattern, query):
+            if match := re.search(pattern, query_lower):
                 return 'file', match.group(1)
 
-        # Export patterns
-        if any(p in query for p in ['export', 'public api', 'public interface']):
-            return 'exports', ''
-
-        # Default to search with extracted terms
+        # Default to search with improved term extraction
         terms = self._extract_search_terms(query)
-        return 'search', ' '.join(terms)
+        return 'search', ' '.join(terms) if terms else query
 
     def _extract_search_terms(self, query: str) -> List[str]:
-        """Extract meaningful search terms from query."""
-        # Remove common words
+        """Extract meaningful search terms from query.
+
+        Filters out:
+        - Common English stop words
+        - Query action words (find, show, list, etc.)
+        - Articles and prepositions
+
+        Returns lowercase terms for FTS matching.
+        """
+        # Extended stop words including query action words
         stop_words = {
+            # Common English
             'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been',
             'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will',
             'would', 'could', 'should', 'may', 'might', 'can', 'must',
@@ -187,12 +235,18 @@ class ClaudeCodeIntegration:
             'how', 'all', 'each', 'every', 'both', 'few', 'more', 'most',
             'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own',
             'same', 'so', 'than', 'too', 'very', 'just', 'and', 'or',
-            'but', 'if', 'because', 'until', 'while', 'show', 'me',
-            'find', 'get', 'what', 'which', 'who', 'whom', 'this', 'that',
+            'but', 'if', 'because', 'until', 'while', 'about',
+            # Query action words
+            'find', 'show', 'list', 'get', 'search', 'locate', 'look',
+            'display', 'give', 'tell', 'what', 'which', 'who', 'whom',
+            'this', 'that', 'these', 'those', 'me', 'my', 'your',
         }
 
         words = re.findall(r'\w+', query.lower())
-        return [w for w in words if w not in stop_words and len(w) > 2]
+        # Filter stop words and very short words (likely not component names)
+        terms = [w for w in words if w not in stop_words and len(w) > 2]
+
+        return terms
 
     def _get_overview(self, max_tokens: int) -> str:
         """Get codebase overview."""

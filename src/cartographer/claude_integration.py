@@ -71,7 +71,7 @@ class ClaudeIntegrationInstaller:
         """Create required directories."""
         directories = [
             self.claude_dir,
-            self.claude_dir / 'skills',
+            self.claude_dir / 'skills' / 'cartographer',  # Skill subdirectory per Claude spec
             self.claude_dir / 'hooks',
             self.claude_dir / 'commands',
         ]
@@ -80,24 +80,52 @@ class ClaudeIntegrationInstaller:
             d.mkdir(parents=True, exist_ok=True)
 
     def _install_skill(self):
-        """Install the cartographer skill with absolute paths."""
-        dst = self.claude_dir / 'skills' / 'cartographer.md'
-        # Always use dynamic generation to ensure absolute paths are embedded
-        self._create_minimal_skill(dst)
+        """Install the cartographer skill from source with absolute paths."""
+        # Claude Code expects: .claude/skills/skill-name/SKILL.md
+        dst = self.claude_dir / 'skills' / 'cartographer' / 'SKILL.md'
+
+        # Clean up old skill location (was .claude/skills/cartographer.md)
+        old_skill = self.claude_dir / 'skills' / 'cartographer.md'
+        if old_skill.exists():
+            old_skill.unlink()
+            print("    - Removed old skill location: cartographer.md")
+
+        # Try to use source skill file, fall back to generated if not found
+        source_skill = self.source_dir / 'skills' / 'cartographer.md'
+        if source_skill.exists():
+            self._install_skill_from_source(source_skill, dst)
+        else:
+            self._create_minimal_skill(dst)
+
+    def _install_skill_from_source(self, src: Path, dst: Path):
+        """Install skill from source file with path substitution."""
+        claude_map_bin = str(self.claude_map_dir / 'bin' / 'claude-map')
+
+        content = src.read_text()
+        # Substitute placeholder paths with absolute paths
+        content = content.replace('.claude-map/bin/claude-map', claude_map_bin)
+
+        dst.write_text(content)
+        print("    + Installed skill: cartographer/SKILL.md")
 
     def _create_minimal_skill(self, dst: Path):
-        """Create minimal skill definition."""
+        """Create minimal skill definition (fallback if source not found)."""
         # Use absolute path to avoid issues when Claude changes working directory
         claude_map_bin = str(self.claude_map_dir / 'bin' / 'claude-map')
 
-        content = f'''# Codebase Cartographer Skill
+        content = f'''---
+name: cartographer
+description: Token-optimized codebase exploration. Use when finding components, checking dependencies, or understanding code structure. Saves 95%+ tokens vs reading files.
+---
+
+# Codebase Cartographer
 
 Use `{claude_map_bin}` for token-efficient code exploration.
 
 ## Commands
 ```bash
 {claude_map_bin} find <name>      # Find component
-{claude_map_bin} query "<text>"   # Natural language query
+{claude_map_bin} query "<text>"   # Pattern-based query
 {claude_map_bin} show <file>      # Show file components
 {claude_map_bin} exports          # List public API
 {claude_map_bin} update           # Update map
@@ -107,7 +135,7 @@ Use `{claude_map_bin}` for token-efficient code exploration.
 Search with cartographer BEFORE reading files to save 95%+ tokens.
 '''
         dst.write_text(content)
-        print("    + Created skill: cartographer.md")
+        print("    + Created skill: cartographer/SKILL.md (minimal)")
 
     def _install_hooks(self):
         """Install hook scripts with absolute paths."""
@@ -198,26 +226,25 @@ Run: `{claude_map_bin} <subcommand>`
         cartographer_section = f'''{start_marker}
 ## CRITICAL: Use Codebase Cartographer First
 
-**You MUST use the cartographer BEFORE using Read, Grep, or Glob tools to explore code.**
+**BEFORE using Read, Grep, or Glob tools to explore code, use the cartographer.** It saves 95%+ tokens compared to reading full files and returns precise line numbers and signatures.
 
 **In Planning Mode:** When using EnterPlanMode, your FIRST action should be to use the cartographer to understand the codebase structure before designing your implementation approach.
 
-```bash
-{claude_map_bin} find <name>      # Find function/class/component by name
-{claude_map_bin} query "<text>"   # Natural language search
-{claude_map_bin} show <file>      # Show file structure without reading full content
-```
-
-**Why this matters:**
-- Saves 95%+ tokens compared to reading full files
-- Returns precise line numbers and signatures
-- Use Read tool ONLY after cartographer identifies the specific lines you need
-
 **Workflow:**
-1. `{claude_map_bin} find ComponentName` - get file path and line numbers
-2. `Read` tool with specific line range if you need implementation details
+1. Use cartographer to find file paths and line numbers
+2. Use `Read` tool with specific line range only if you need full implementation details
 
 **Fallback:** If cartographer returns no results, use native Grep/Glob/Read tools.
+
+### Quick Reference
+```bash
+{claude_map_bin} find <name>      # Find by name (fastest)
+{claude_map_bin} query "<text>"   # Pattern-based search
+{claude_map_bin} show <file>      # File structure
+{claude_map_bin} exports          # List public API
+```
+
+For full command options, query patterns, and pagination: use the `cartographer` skill.
 {end_marker}'''
 
         if claude_md.exists():

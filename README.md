@@ -212,11 +212,14 @@ claude-map query "<text>" -f json      # Output as JSON
 claude-map query "<text>" -q           # Quiet mode
 ```
 
-**Query examples:**
-- `"find UserProfile component"` - find by name
-- `"what does auth.py depend on"` - dependency analysis
-- `"show me exported functions"` - list public API
-- `"call chain for authenticate"` - trace function calls
+**Query patterns supported:**
+- `"find UserProfile"` - locate component by name
+- `"dependencies of auth.py"` - file dependencies
+- `"what calls authenticate"` - call chain analysis
+- `"exports"` - list public API
+- `"overview"` - codebase summary
+
+**Fallback:** Unrecognized patterns do full-text search on component names.
 
 **Token limit guidance:**
 - `-t 2000` - Simple lookups, just a few results needed

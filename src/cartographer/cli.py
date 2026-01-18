@@ -127,19 +127,46 @@ def init(project_root, workers, no_mp, watch):
 @click.option('--quiet', '-q', is_flag=True, help='Suppress token savings info')
 def query(query_text, max_tokens, offset, format, quiet):
     """
-    Query the codebase map.
+    Query the codebase map with pattern matching.
 
-    Supports natural language queries. The system will parse your intent
-    and return token-optimized results. Use --offset to paginate through
-    large result sets.
+    Parses common query patterns like "find X", "dependencies of Y",
+    "what calls Z". Falls back to full-text search on component names.
+
+    For best results, use specific patterns:
+
+    \b
+    FIND patterns:
+        "find UserProfile"           - locate by name
+        "where is authenticate"      - same as find
+        "search for database"        - same as find
+
+    \b
+    DEPENDENCY patterns:
+        "what does auth.py depend on"
+        "dependencies of database.py"
+        "imports in utils.py"
+
+    \b
+    CALL CHAIN patterns:
+        "what calls authenticate"
+        "call chain for process"
+
+    \b
+    OTHER patterns:
+        "overview"                   - codebase summary
+        "exports"                    - list public API
+        "show src/auth.py"          - file components
+
+    \b
+    FALLBACK:
+        Any other text does FTS (full-text search) on component names.
 
     \b
     Examples:
-        claude-map query "find UserProfile component"
+        claude-map query "find UserProfile"
         claude-map query "what does auth.py depend on"
-        claude-map query "show me exported functions"
         claude-map query "call chain for authenticate"
-        claude-map query "find User" --offset 20    # Get next page
+        claude-map query "find User" --offset 20
     """
     project_root = find_project_root()
 

@@ -1,142 +1,96 @@
-# Codebase Cartographer Skill
-
-**Token-optimized codebase mapping for efficient code exploration**
-
-Copyright (c) 2025 Breach Craft - Mike Piekarski <mp@breachcraft.io>
-
+---
+name: cartographer
+description: Token-optimized codebase exploration using the Codebase Cartographer. Use this skill when exploring code structure, finding components, checking dependencies, or understanding a codebase. Saves 95%+ tokens compared to reading full files.
 ---
 
-## Overview
+# Codebase Cartographer
 
-You have access to Codebase Cartographer, a tool that provides token-efficient codebase exploration. Instead of loading entire files (consuming 10,000-50,000+ tokens), you can query the codebase map which returns 200-2,000 tokens with the same information.
-
-**Always prefer using the cartographer for codebase exploration before reading full files.**
+Query the codebase map before reading files to save tokens.
 
 ## When to Use
 
-Use the cartographer when you need to:
-- Find components, classes, or functions by name
-- Understand file dependencies and imports
-- Get an overview of the codebase structure
-- Find exported/public APIs
-- Trace call chains between functions
-- Search for code patterns
+- Finding components, classes, or functions by name
+- Understanding file dependencies
+- Getting codebase structure overview
+- Finding exported/public APIs
+- Tracing call chains
 
 ## Commands
 
-The cartographer is available via the `.claude-map/bin/claude-map` CLI:
-
+### `find` - Quick Component Search (Use Most Often)
 ```bash
-# Find components by name (fastest)
-.claude-map/bin/claude-map find <name>
-
-# Natural language query
-.claude-map/bin/claude-map query "<question>"
-
-# Show components in a file
-.claude-map/bin/claude-map show <file_path>
-
-# List exported/public components
-.claude-map/bin/claude-map exports
-
-# Get codebase statistics
-.claude-map/bin/claude-map stats
-
-# Update map after changes
-.claude-map/bin/claude-map update
+.claude-map/bin/claude-map find <name>        # Search by name
+.claude-map/bin/claude-map find <name> -l 50  # Return up to 50 results (default: 20)
+.claude-map/bin/claude-map find <name> -o 20  # Skip first 20 (pagination)
+.claude-map/bin/claude-map find <name> -q     # Quiet mode (suppress token stats)
 ```
 
-## Query Examples
-
+### `query` - Pattern-Based Search
 ```bash
-# Find a specific component
-.claude-map/bin/claude-map find UserProfile
-.claude-map/bin/claude-map find authenticate
-
-# Ask questions
-.claude-map/bin/claude-map query "find authentication components"
-.claude-map/bin/claude-map query "what does auth.py depend on"
-.claude-map/bin/claude-map query "show me exported functions"
-.claude-map/bin/claude-map query "call chain for process_request"
-
-# File exploration
-.claude-map/bin/claude-map show src/auth/user.py
-.claude-map/bin/claude-map query "dependencies for database.py"
+.claude-map/bin/claude-map query "<text>"          # Pattern-based query
+.claude-map/bin/claude-map query "<text>" -t 5000  # Limit to 5000 tokens (default: 10000)
+.claude-map/bin/claude-map query "<text>" -o 50    # Skip first 50 results (pagination)
+.claude-map/bin/claude-map query "<text>" -q       # Quiet mode
 ```
 
-## Best Practices
-
-### 1. Search Before Reading
-Before using the Read tool on a file, use the cartographer to:
-- Verify the file exists and contains what you need
-- Find the specific line numbers of interest
-- Understand the file's structure
-
+### `show` - File Structure
 ```bash
-# Instead of reading entire file:
-.claude-map/bin/claude-map show src/large_file.py
-# Then read only the specific lines you need
+.claude-map/bin/claude-map show <file_path>   # Show all components in a file
 ```
 
-### 2. Find Components First
-When looking for a class or function:
+### `exports` - Public API
 ```bash
-# Use find for quick lookup
-.claude-map/bin/claude-map find ClassName
-# Returns: class ClassName(p:3, m:5) - path/to/file.py:42
-# Then read just that section
+.claude-map/bin/claude-map exports            # List all exported/public components
+.claude-map/bin/claude-map exports -l 100     # Return up to 100 results
+.claude-map/bin/claude-map exports -o 50      # Skip first 50 (pagination)
 ```
 
-### 3. Understand Dependencies
-Before modifying a file, check what depends on it:
+### Other Commands
 ```bash
-.claude-map/bin/claude-map query "what calls function_name"
-.claude-map/bin/claude-map query "dependencies for module.py"
+.claude-map/bin/claude-map stats              # Database statistics
+.claude-map/bin/claude-map update             # Update map after changes
 ```
 
-### 4. Update After Changes
-After making significant file changes, update the map:
-```bash
-.claude-map/bin/claude-map update
+## Query Patterns
+
+| Pattern | Example |
+|---------|---------|
+| Find by name | `find UserProfile` |
+| Dependencies | `dependencies of auth.py` |
+| Call chain | `what calls authenticate` |
+| File components | `show src/user.py` |
+| Overview | `overview` |
+| Exports | `exports` |
+
+**Fallback:** Unrecognized patterns do full-text search on component names.
+
+## Pagination
+
+When results are truncated, output shows:
 ```
+--- Results 1-20 of 150 (use --offset 20 for next 20) ---
+```
+
+Use `--offset` / `-o` to get the next page.
+
+## Workflow
+
+1. **Search first**: `find ComponentName` returns location in ~50 tokens
+2. **Read targeted**: Use line numbers from search to read only needed code
+3. **Check dependencies**: Before modifying, check what calls/imports the code
 
 ## Output Format
 
-### Compact Format (~50 tokens per result)
+Compact (~50 tokens per result):
 ```
 class UserProfile(p:3, m:5) - auth/user.py:15
-func authenticate(params:2, async, exp) - auth/login.py:42
-template base.html(blocks:3, inc:2) - templates/base.html:1
-```
-
-### Summary Format (~200 tokens)
-```
-**UserProfile** (class) [exported]
-Location: src/auth/user.py:15
-Signature: `class UserProfile(BaseModel)`
-Props: id: int, email: str, name: str
-Methods: validate, to_dict, from_dict
-Doc: User profile model with validation
+func authenticate(params:2, async) - auth/login.py:42
 ```
 
 ## Token Savings
 
-| Operation | Without Map | With Map | Savings |
-|-----------|-------------|----------|---------|
+| Operation | Traditional | Optimized | Savings |
+|-----------|-------------|-----------|---------|
 | Find component | 15,000 | 200 | 98.7% |
-| File dependencies | 25,000 | 500 | 98.0% |
+| Dependencies | 25,000 | 500 | 98.0% |
 | List exports | 30,000 | 1,000 | 96.7% |
-
-## Initialization
-
-If the map doesn't exist, initialize it first:
-```bash
-.claude-map/bin/claude-map init
-```
-
-## Integration Notes
-
-- The map is stored in `.claude-map/codebase.db`
-- Updates are incremental (only changed files)
-- Hooks automatically update the map when you modify files
-- Use `/map` command to manually trigger a full update
